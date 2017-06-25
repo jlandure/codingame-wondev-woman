@@ -1,6 +1,6 @@
 const size = parseInt(readline());
 const unitsPerPlayer = parseInt(readline());
-const writeAction = (action) => `${action.type} ${action.unit} ${action.move} ${action.build}`
+const writeAction = (action) => `${action.type} ${action.unitIndex} ${action.move} ${action.build}`
 let unit
 let opponent
 let lastAction
@@ -32,71 +32,77 @@ const computeFuturePosition = (unit, direction) => {
 }
     
 const compareAction = (a, b) => {
-    //TODO: contrer l'adversaire
-    
     if(a.coeff == b.coeff) {
         return a.hauteurMove > b.hauteurMove
     }
     return a.coeff < b.coeff
 }
 
-const isDeadEnd = (x, y) => 
+const isDeadEnd = (x, y, unit) => 
         !(x > 0 && y > 0 && x < size-1 && y < size-1
         && grid[x][y] != '.' 
         && (grid[x][y] <= unit.hauteur
         || grid[x][y] === (unit.hauteur + 1)))
-const possibleMoves = ({x,y}) => {
+const possibleMoves = ({x,y}, unit) => {
     let count = 0
     
-    if(isDeadEnd(x, y+1)) count++
-    if(isDeadEnd(x+1, y+1)) count++
-    if(isDeadEnd(x+1, y)) count++
-    if(isDeadEnd(x+1, y-1)) count++
-    if(isDeadEnd(x, y-1)) count++
-    if(isDeadEnd(x+1, y+1)) count++
-    if(isDeadEnd(x-1, y)) count++
-    if(isDeadEnd(x-1, y-1)) count++
-    if(isDeadEnd(x-1, y+1)) count++
+    if(isDeadEnd(x, y+1, unit)) count++
+    if(isDeadEnd(x+1, y+1, unit)) count++
+    if(isDeadEnd(x+1, y, unit)) count++
+    if(isDeadEnd(x+1, y-1, unit)) count++
+    if(isDeadEnd(x, y-1, unit)) count++
+    if(isDeadEnd(x+1, y+1, unit)) count++
+    if(isDeadEnd(x-1, y, unit)) count++
+    if(isDeadEnd(x-1, y-1, unit)) count++
+    if(isDeadEnd(x-1, y+1, unit)) count++
     return 9 - count
 }
 
 const computeCoeffOnAction = (action) => {
-    action.futurMove = computeFuturePosition(unit, action.move)
-    action.futurMove.count = possibleMoves(action.futurMove)
-    //printErr(JSON.stringify(action))
-    action.futurBuild = computeFuturePosition(action.futurMove, action.build)
-    action.futurBuild.hauteur += 1
-    action.coeff = 0
+    if(action === 'MOVE&BUILD') {
+            action.futurMove = computeFuturePosition(action.unit, action.move)
+        action.futurMove.count = possibleMoves(action.futurMove, action.unit)
+        //printErr(JSON.stringify(action))
+        action.futurBuild = computeFuturePosition(action.futurMove, action.build)
+        action.futurBuild.hauteur += 1
+        action.coeff = 0
+        
+        //jump to score
+        if(unit.hauteur === 3 && action.futurMove.hauteur === 3) 
+            action.coeff += 1000
+        
+        //apply game rules on move
+        if(action.futurMove.hauteur === 3)
+            action.coeff += 750
+        if(action.futurMove.hauteur === unit.hauteur) 
+            action.coeff += 250
+        if(action.futurMove.hauteur > unit.hauteur) 
+            action.coeff += 500
+        if(action.futurMove.hauteur < unit.hauteur) 
+            action.coeff -= 300
+        //apply game rules on build
+        if(action.futurBuild.hauteur - action.futurMove.hauteur === 1)
+            action.coeff += 100
+        if(action.futurBuild.hauteur >= 3)
+            action.coeff -= 200
+        if(action.futurBuild.hauteur - action.futurMove.hauteur >= 2)
+            action.coeff -= 50
+        //detect deadend    
+        if(action.futurMove.count > 6) 
+            action.coeff += 100
+        if(action.futurMove.count < 2) 
+            action.coeff -= 750
+        
+        //avoid opponent
+        if(distance(opponent, action.futurBuild) <= 2) 
+            action.coeff -= 300
+    }
     
-    //jump to score
-    if(unit.hauteur === 3 && action.futurMove.hauteur === 3) 
-        action.coeff += 1000
+    //use the other unit: not working
+    //if(lastAction && lastAction.unitIndex === action.unitIndex) 
+    //    count
+    //    action.coeff -= 300
     
-    //apply game rules
-    if(action.futurMove.hauteur === unit.hauteur) 
-        action.coeff += 150
-    if(action.futurMove.hauteur > unit.hauteur) 
-        action.coeff += 200
-    if(action.futurMove.hauteur - unit.hauteur < 0) 
-        action.coeff -= 150
-    if(action.futurMove.hauteur - unit.hauteur === -1) 
-        action.coeff += 100
-    if(action.futurBuild.hauteur - action.futurMove.hauteur === 1)
-        action.coeff += 100
-    //if(action.futurBuild.hauteur === 3)
-    //    action.coeff -= 200
-    if(action.futurBuild.hauteur - action.futurMove.hauteur >= 2)
-        action.coeff -= 150
-    
-    //detect deadend    
-    if(action.futurMove.count > 6) action.coeff += 100
-    if(action.futurMove.count < 2) action.coeff -= 1001
-    
-    //avoid opponent
-    if(distance(opponent, action.futurBuild) <= 1) action.coeff -= 150
-    
-    //ne pa builder sur les 3 si l'adversaire est loin
-    //essayer de faire un carré. 
     // si je suis à 2 alors sautez par terre mais ne pas builder le 2 :/ => build pour remonter
     return action
 }
@@ -123,21 +129,21 @@ while (true) {
     var nbLegalActions = parseInt(readline());
     for (var i = 0; i < nbLegalActions; i++) {
         var inputs = readline().split(' ');
+        let unitOnAction = parseInt(inputs[1])
         legalActions.push({
             type: inputs[0],
-            unit: parseInt(inputs[1]),
+            unitIndex: unitOnAction,
+            unit: units[unitOnAction],
             move: inputs[2],
             build: inputs[3],
         })
     }
+    
     let actions = legalActions.map(computeCoeffOnAction)
+    //choose the unit ?
     actions = actions.sort(compareAction);
     lastAction = actions[0];
-    if(actions.length <= 3) lastAction = actions[actions.length - 1]
-    //printErr('lastAction>' + JSON.stringify(lastAction))
-    //printErr(JSON.stringify(actions[1]))
-    //printErr(JSON.stringify(actions[2]))
-    
+
     print(writeAction(lastAction));
 }
 
