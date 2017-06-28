@@ -177,7 +177,7 @@ while (true) {
             opponents.push(opponent)
     }
     var nbLegalActions = parseInt(readline());
-    if(nbLegalActions === 0) {print("This is the end"); break;}
+    if(nbLegalActions === 0) {print("ACCEPT-DEFEAT This is the end!"); break;}
 
     for (var i = 0; i < nbLegalActions; i++) {
         var inputs = readline().split(' ');
