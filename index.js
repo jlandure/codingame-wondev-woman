@@ -1,9 +1,8 @@
 const size = parseInt(readline());
 const unitsPerPlayer = parseInt(readline());
 const writeAction = (action) => `${action.type} ${action.unitIndex} ${action.move} ${action.build}`
-let unit
-let opponent
 let lastAction
+let opponents = []
 const grid = []
 const distance = (origin, destination) =>
   Math.sqrt(
@@ -32,6 +31,8 @@ const computeFuturePosition = (unit, direction) => {
 }
     
 const compareAction = (a, b) => {
+    //TODO: contrer l'adversaire
+    
     if(a.coeff == b.coeff) {
         return a.hauteurMove > b.hauteurMove
     }
@@ -59,21 +60,24 @@ const possibleMoves = ({x,y}, unit) => {
 }
 
 const computeCoeffOnAction = (action) => {
-    if(action === 'MOVE&BUILD') {
-            action.futurMove = computeFuturePosition(action.unit, action.move)
+    action.coeff = 0
+    if(action.type === 'MOVE&BUILD') {
+        action.futurMove = computeFuturePosition(action.unit, action.move)
         action.futurMove.count = possibleMoves(action.futurMove, action.unit)
         //printErr(JSON.stringify(action))
         action.futurBuild = computeFuturePosition(action.futurMove, action.build)
         action.futurBuild.hauteur += 1
-        action.coeff = 0
+        
+        action.count = possibleMoves(action.unit, action.unit)
+        if(action.count === 0)
+            action.coeff += 1000
         
         //jump to score
-        if(unit.hauteur === 3 && action.futurMove.hauteur === 3) 
+        if(action.futurMove.hauteur === 3 
+            && action.futurMove.count !== 0)
             action.coeff += 1000
         
         //apply game rules on move
-        if(action.futurMove.hauteur === 3)
-            action.coeff += 750
         if(action.futurMove.hauteur === unit.hauteur) 
             action.coeff += 250
         if(action.futurMove.hauteur > unit.hauteur) 
@@ -83,25 +87,45 @@ const computeCoeffOnAction = (action) => {
         //apply game rules on build
         if(action.futurBuild.hauteur - action.futurMove.hauteur === 1)
             action.coeff += 100
-        if(action.futurBuild.hauteur >= 3)
-            action.coeff -= 200
+        if(action.futurBuild.hauteur === 3)
+            action.coeff += 500
         if(action.futurBuild.hauteur - action.futurMove.hauteur >= 2)
             action.coeff -= 50
         //detect deadend    
         if(action.futurMove.count > 6) 
             action.coeff += 100
-        if(action.futurMove.count < 2) 
-            action.coeff -= 750
+        if(action.futurMove.count < 2)
+            action.coeff -= 1500
+        if(action.futurMove.count === 0)
+            action.coeff -= 1500
         
         //avoid opponent
-        if(distance(opponent, action.futurBuild) <= 2) 
+        if(
+            (distance(opponents[0], action.futurBuild) <= 2
+            || distance(opponents[1], action.futurBuild) <= 2)
+            && grid[action.futurBuild.x][action.futurBuild.y] >= 2) 
+            //opponent will go up
+            action.coeff -= 300
+            
+        if(distance(opponents[0], action.futurMove) <= 2
+            || distance(opponents[1], action.futurMove) <= 2) 
+            //opponent will push
             action.coeff -= 300
     }
     
-    //use the other unit: not working
-    //if(lastAction && lastAction.unitIndex === action.unitIndex) 
-    //    count
-    //    action.coeff -= 300
+    if(action.type === 'PUSH&BUILD') {
+
+        action.coeff += 1000;
+        action.futurePush = computeFuturePosition(action.unit, action.move)
+        action.futureLanding = computeFuturePosition(action.futurePush, action.build)
+        if(action.futurePush.hauteur === 2)
+            action.coeff += 500
+        if(action.futureLanding.hauteur === 3)
+            action.coeff -= 2000
+        if(action.futurePush > action.futureLanding.hauteur)
+            //opponent down
+            action.coeff += 1000
+    }
     
     // si je suis à 2 alors sautez par terre mais ne pas builder le 2 :/ => build pour remonter
     return action
@@ -113,7 +137,6 @@ while (true) {
         grid[i] = row.split('')
     }
     const units = []
-    const opponents = []
     const legalActions = []
     for (var i = 0; i < unitsPerPlayer; i++) {
         var inputs = readline().split(' ');
@@ -143,7 +166,6 @@ while (true) {
     //choose the unit ?
     actions = actions.sort(compareAction);
     lastAction = actions[0];
-
     print(writeAction(lastAction));
 }
 
